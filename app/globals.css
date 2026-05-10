@@ -141,7 +141,7 @@ html {
 body {
   background-color: var(--mm-canvas);
   color: var(--mm-ink);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Select option theming */

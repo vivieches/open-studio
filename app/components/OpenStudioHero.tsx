@@ -9,8 +9,8 @@ export function OpenStudioHero() {
         <h1
           id="dashboard-hero-title"
           aria-label="Crea, organiza y publica más rápido."
-          className="font-[var(--font-display)] text-[54px] font-medium leading-[0.99] tracking-normal text-[#F5F2F4] sm:text-[64px] xl:text-[70px]"
-          style={{ fontFamily: "var(--font-display), Georgia, serif" }}
+          className="font-sans text-[54px] font-medium leading-[0.99] tracking-tight text-[#F5F2F4] sm:text-[64px] xl:text-[70px]"
+          style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
         >
           Crea, organiza y
           <br />

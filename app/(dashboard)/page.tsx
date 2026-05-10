@@ -9,11 +9,11 @@ export default function HomePage() {
   return (
     <>
       <Header />
-      <div className="relative flex flex-1 flex-col overflow-hidden bg-[#0a0a0d]">
+      <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto bg-[#0a0a0d]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_76%_18%,rgba(208,111,167,0.055),transparent_32%),radial-gradient(circle_at_24%_5%,rgba(155,108,255,0.035),transparent_28%),linear-gradient(180deg,#0a0a0d_0%,#0a0a0d_48%,#0a0a0d_100%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:radial-gradient(circle_at_center,rgba(255,255,255,0.8)_0.6px,transparent_0.7px)] [background-size:4px_4px]" />
 
-        <div className="relative z-10 mx-auto box-border flex w-full max-w-[1526px] flex-1 flex-col pb-6 px-[clamp(32px,7vw,136px)]">
+        <div className="relative z-10 mx-auto box-border flex w-full max-w-[1526px] flex-1 flex-col px-[clamp(32px,7vw,136px)] pb-6 min-h-[calc(100%+32px)]">
           <OpenStudioHero />
           <QuickActions />
 
