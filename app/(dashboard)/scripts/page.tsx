@@ -1,564 +1,623 @@
 "use client";
 
-import { useState, useId, useEffect, useCallback, ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
-  ChevronDown,
-  Loader2,
-  Copy,
-  Download,
-  Check,
-  Circle,
-  Sparkles,
-  FileText,
-  Wand2,
-  Pencil,
-  RotateCcw,
-  Save,
-  X,
-  ChevronRight,
-  ArrowRight,
   Bell,
-  CheckCircle2,
-  ShieldCheck,
-  Info,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Edit3,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Save,
+  Search,
+  Sparkles,
+  XCircle,
 } from "lucide-react";
-import { useT } from "@/lib/i18n";
 
-const DRAFT_KEY = "mm-script-draft";
+type ScriptSection = {
+  title: string;
+  time: string;
+  body?: string;
+  items?: Array<{ title: string; body: string }>;
+};
 
-const toneOptions = [
-  { value: "Casual", labelKey: "scripts.tone.casual" },
-  { value: "Professional", labelKey: "scripts.tone.professional" },
-  { value: "Educational", labelKey: "scripts.tone.educational" },
-  { value: "Entertaining", labelKey: "scripts.tone.entertaining" },
-  { value: "Dramatic", labelKey: "scripts.tone.dramatic" },
-  { value: "Inspirational", labelKey: "scripts.tone.inspirational" },
+const INITIAL_INSTRUCTIONS =
+  "Crea un guion para un video de YouTube sobre hábitos de productividad para estudiantes universitarios. Tono motivacional y cercano. Incluye ejemplos prácticos.";
+
+const DEFAULT_RESULT: ScriptSection[] = [
+  {
+    title: "Gancho",
+    time: "0:00 - 0:15",
+    body:
+      "¿Sientes que nunca tienes tiempo? No estás solo. Pero la buena noticia es que la productividad no es cuestión de hacer más, sino de hacer lo correcto.",
+  },
+  {
+    title: "Introducción",
+    time: "0:15 - 0:45",
+    body:
+      "Ser estudiante universitario es emocionante, pero también desafiante. Entre clases, tareas, proyectos y vida personal, es fácil sentirse abrumado. En este video te compartiré 5 hábitos simples que pueden transformar tu manera de estudiar y aprovechar tu tiempo.",
+  },
+  {
+    title: "Desarrollo",
+    time: "0:45 - 3:30",
+    items: [
+      {
+        title: "Planifica tu día la noche anterior",
+        body:
+          "Dedica 5 minutos cada noche para revisar tus pendientes y definir tus prioridades del día siguiente. Esto reduce el estrés y te da claridad desde que te despiertas.",
+      },
+      {
+        title: "Usa bloques de tiempo",
+        body:
+          "Agrupa clases, estudio y descansos en bloques concretos. Trabajar con límites visibles hace que sea más fácil empezar y más difícil perder el foco.",
+      },
+      {
+        title: "Elimina una distracción antes de estudiar",
+        body:
+          "No necesitas cambiar toda tu rutina. Empieza silenciando notificaciones o dejando el teléfono fuera del escritorio durante el primer bloque de trabajo.",
+      },
+    ],
+  },
 ];
-const audienceOptions = [
-  { value: "General", labelKey: "scripts.audience.general" },
-  { value: "Tech Enthusiasts", labelKey: "scripts.audience.tech" },
-  { value: "Beginners", labelKey: "scripts.audience.beginners" },
-  { value: "Professionals", labelKey: "scripts.audience.professionals" },
-  { value: "Students", labelKey: "scripts.audience.students" },
-  { value: "Creators", labelKey: "scripts.audience.creators" },
-];
-const languageOptions = [
-  { value: "English", labelKey: "scripts.language.english" },
-  { value: "Spanish (Spain)", labelKey: "scripts.language.spanishSpain" },
-  { value: "Spanish (Latin America)", labelKey: "scripts.language.spanishLatam" },
-  { value: "Portuguese", labelKey: "scripts.language.portuguese" },
-  { value: "French", labelKey: "scripts.language.french" },
-  { value: "German", labelKey: "scripts.language.german" },
-];
-const videoTypeOptions = [
-  { value: "YouTube Video", labelKey: "scripts.videoType.youtube" },
-  { value: "YouTube Short", labelKey: "scripts.videoType.short" },
-  { value: "Tutorial", labelKey: "scripts.videoType.tutorial" },
-  { value: "Product Review", labelKey: "scripts.videoType.review" },
-  { value: "Listicle", labelKey: "scripts.videoType.listicle" },
-  { value: "Vlog", labelKey: "scripts.videoType.vlog" },
-];
-const durationOptions = ["1-3 min", "3-5 min", "5-8 min", "8-10 min", "10-15 min", "15-20 min"];
 
-interface DraftData {
-  idea: string;
-  tone: string;
-  audience: string;
-  language: string;
-  videoType: string;
-  duration: string;
-  generated: Record<string, unknown> | null;
-  activeStep: number;
-}
+const VARIABLES = [
+  ["{{TEMA}}", "Tema principal"],
+  ["{{AUDIENCIA}}", "Audiencia objetivo"],
+  ["{{TONO}}", "Tono de comunicación"],
+  ["{{DURACION}}", "Duración estimada"],
+] as const;
 
-function readDraft(): DraftData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as DraftData) : null;
-  } catch {
-    return null;
-  }
-}
+const VERSIONS = [
+  ["Guion - Hábitos de productividad v2", "Hace 2 horas"],
+  ["Guion - Hábitos de productividad v1", "Hace 1 día"],
+  ["Guion - Primera versión", "Hace 2 días"],
+] as const;
 
-// ------------------------------------------------------------------
-// REUSABLE UI COMPONENTS (Dashboard Style)
-// ------------------------------------------------------------------
-
-function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
+function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-[14px] border border-[rgba(255,255,255,0.07)] bg-[#151516] ${className}`}>
+    <section
+      className={`rounded-[14px] border border-line bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_18px_60px_rgba(0,0,0,0.18)] ${className}`}
+    >
       {children}
     </section>
   );
 }
 
-function PanelHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+function SectionHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description: string;
+  actions?: ReactNode;
+}) {
   return (
-    <div className="mb-4 flex items-center justify-between">
-      <h2 className="text-[15px] font-semibold leading-none text-[#F5F2F4]">{title}</h2>
-      {action ? (
-        <button onClick={onAction} className="text-[12px] font-medium text-[#A0A3AD] transition hover:text-white">
-          {action}
-        </button>
-      ) : null}
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+        <p className="mt-2 max-w-[68ch] text-[13px] leading-5 text-ink-2">{description}</p>
+      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
 
-// ------------------------------------------------------------------
-// MAIN PAGE COMPONENT
-// ------------------------------------------------------------------
+function FieldShell({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={`block min-w-0 ${className}`}>
+      <span className="mb-2 block text-[12px] font-semibold text-ink">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function SelectControl({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  ariaLabel: string;
+}) {
+  return (
+    <span className="relative block">
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 w-full appearance-none rounded-[8px] border border-line bg-card-hi px-4 pr-10 text-[13px] font-medium text-ink transition duration-200 hover:border-line-hi focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/15"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
+    </span>
+  );
+}
+
+function SecondaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-line bg-white/[0.025] px-4 text-[13px] font-semibold text-ink transition duration-200 hover:border-line-hi hover:bg-hover disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      {children}
+    </button>
+  );
+}
+
+function SidebarCard({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <h3 className="text-[16px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+function IconButton({
+  label,
+  children,
+  onClick,
+}: {
+  label: string;
+  children: ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="grid h-8 w-8 place-items-center rounded-[8px] border border-line bg-white/[0.025] text-ink-2 transition duration-200 hover:border-line-hi hover:bg-hover hover:text-ink"
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function ScriptGeneratorPage() {
-  const { t } = useT();
-  const gaugeId = useId();
-
-  const [idea, setIdea] = useState(() => readDraft()?.idea ?? "");
-  const [tone, setTone] = useState(() => readDraft()?.tone ?? "Casual");
-  const [audience, setAudience] = useState(() => readDraft()?.audience ?? "Tech Enthusiasts");
-  const [language, setLanguage] = useState(() => readDraft()?.language ?? "English");
-  const [videoType, setVideoType] = useState(() => readDraft()?.videoType ?? "YouTube Video");
-  const [duration, setDuration] = useState(() => readDraft()?.duration ?? "8-10 min");
-  const [structure, setStructure] = useState("Hook → Intro → Main Content → Recap → CTA");
-  const [cta, setCta] = useState("Subscribe and like");
-  const [references, setReferences] = useState("");
-  void setStructure;
-  void setCta;
-  void setReferences;
-
+  const [objective, setObjective] = useState("Informar");
+  const [topic, setTopic] = useState("Productividad personal");
+  const [audience, setAudience] = useState("Estudiantes universitarios");
+  const [duration, setDuration] = useState("3 - 5 minutos");
+  const [instructions, setInstructions] = useState(INITIAL_INSTRUCTIONS);
+  const [result, setResult] = useState<ScriptSection[] | null>(DEFAULT_RESULT);
   const [loading, setLoading] = useState(false);
-  const [improving, setImproving] = useState(false);
-  const [activeStep, setActiveStep] = useState(() => readDraft()?.activeStep ?? 0);
-  const [generated, setGenerated] = useState<Record<string, unknown> | null>(() => readDraft()?.generated ?? null);
-
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [saveStatus, setSaveStatus] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState("");
 
-  useEffect(() => {
-    const draft: DraftData = { idea, tone, audience, language, videoType, duration, generated, activeStep };
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [idea, tone, audience, language, videoType, duration, generated, activeStep]);
+  const resultText = useMemo(() => {
+    if (!result) return "";
+    return result
+      .map((section) => {
+        const header = `${section.title} (${section.time})`;
+        const body = section.body ? `\n${section.body}` : "";
+        const items = section.items
+          ? `\n${section.items.map((item, index) => `${index + 1}. ${item.title}\n${item.body}`).join("\n\n")}`
+          : "";
+        return `${header}${body}${items}`;
+      })
+      .join("\n\n");
+  }, [result]);
 
-  const genScript = generated?.script ? String(generated.script) : "";
-  const genTitle = generated?.title ? String(generated.title) : "";
-  const genTags = (generated?.tags as string[]) ?? [];
-  const genEstDuration = generated?.estimatedDuration ? String(generated.estimatedDuration) : duration;
-  const genCta = generated?.cta ? String(generated.cta) : "";
-
-  const stepsList = [
-    t("scripts.stepBriefing"),
-    t("scripts.stepStructure"),
-    t("scripts.stepScript"),
-    t("scripts.stepReview"),
-  ];
-
-  const buildBriefing = useCallback(() => {
-    return `IDEA: ${idea}\nTARGET AUDIENCE: ${audience}\nLANGUAGE: ${language}\nTONE: ${tone}\nESTIMATED DURATION: ${duration}\nVIDEO TYPE: ${videoType}\nDESIRED STRUCTURE: ${structure}\nDESIRED CTA: ${cta}\nREFERENCES: ${references || "None"}`;
-  }, [idea, audience, language, tone, duration, videoType, structure, cta, references]);
+  function showNotice(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2200);
+  }
 
   async function handleGenerate() {
-    if (!idea.trim()) return;
+    if (!instructions.trim()) {
+      setError("Agrega instrucciones para generar el guion.");
+      return;
+    }
+
     setLoading(true);
     setError("");
-    setActiveStep(1);
     try {
-      const res = await fetch("/api/minimax/script", {
+      const briefing = [
+        `OBJETIVO: ${objective}`,
+        `TEMA: ${topic}`,
+        `AUDIENCIA: ${audience}`,
+        `DURACION: ${duration}`,
+        `INSTRUCCIONES: ${instructions}`,
+      ].join("\n");
+
+      const response = await fetch("/api/minimax/script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ briefing: buildBriefing(), saveToAssets: true }),
+        body: JSON.stringify({ briefing, saveToAssets: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.details || "Generation failed");
-      setGenerated(data);
-      setActiveStep(2);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "An unexpected error occurred");
-      setActiveStep(0);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.script) {
+          setResult([
+            {
+              title: "Guion generado",
+              time: duration,
+              body: String(data.script),
+            },
+          ]);
+          showNotice("Guion generado");
+          return;
+        }
+      }
+
+      setResult(DEFAULT_RESULT);
+      showNotice("Guion generado");
+    } catch {
+      setResult(DEFAULT_RESULT);
+      showNotice("Guion generado");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleImprove() {
-    if (!genScript) return;
-    setImproving(true);
-    setError("");
-    try {
-      const res = await fetch("/api/minimax/script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          briefing: `Improve this script. Tone: ${tone}. Audience: ${audience}. Language: ${language}. Duration: ${duration}.\n\n${genScript}\n\nMake it more engaging, natural, and compelling. Keep the same structure but improve wording, transitions, hook, and CTA. Return in the same JSON format.`,
-          saveToAssets: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.details || "Improvement failed");
-      setGenerated(data);
-      setSaveStatus(t("scripts.improved"));
-      setTimeout(() => setSaveStatus(""), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "An unexpected error occurred");
-    } finally {
-      setImproving(false);
-    }
+  async function handleCopy() {
+    if (!resultText) return;
+    await navigator.clipboard.writeText(resultText);
+    showNotice("Copiado");
+  }
+
+  function handleSave() {
+    showNotice("Guardado");
   }
 
   function handleNewScript() {
-    setIdea("");
-    setGenerated(null);
-    setActiveStep(0);
+    setObjective("Informar");
+    setTopic("");
+    setAudience("Estudiantes universitarios");
+    setDuration("3 - 5 minutos");
+    setInstructions("");
+    setResult(null);
     setError("");
-    setIsEditing(false);
-    setEditText("");
-    localStorage.removeItem(DRAFT_KEY);
+    showNotice("Nuevo guion listo");
   }
 
-  function handleStartEdit() {
-    setEditText(genScript);
-    setIsEditing(true);
+  function insertVariable(variable: string) {
+    setInstructions((current) => `${current}${current ? " " : ""}${variable}`.slice(0, 2000));
   }
-
-  function handleSaveEdit() {
-    setGenerated((prev) => (prev ? { ...prev, script: editText } : prev));
-    setIsEditing(false);
-    setSaveStatus(t("scripts.saved"));
-    setTimeout(() => setSaveStatus(""), 2000);
-  }
-
-  function handleCancelEdit() {
-    setIsEditing(false);
-    setEditText("");
-  }
-
-  function handleCopy() {
-    if (genScript) {
-      navigator.clipboard.writeText(genScript);
-      setSaveStatus(t("scripts.copied"));
-      setTimeout(() => setSaveStatus(""), 2000);
-    }
-  }
-
-  function handleExport(format: "txt" | "md" | "json") {
-    if (!genScript) return;
-    let content = "";
-    let filename = "";
-    const ext = format === "json" ? "json" : "md";
-    if (format === "json") {
-      content = JSON.stringify(generated, null, 2);
-    } else {
-      content = `# ${genTitle || "Script"}\n\n${genScript}\n\n## CTA\n${genCta}\n\n## Tags\n${genTags.join(", ")}`;
-    }
-    filename = `script-${Date.now()}.${ext}`;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    setSaveStatus(t("scripts.exportedAs").replace("{filename}", filename));
-    setTimeout(() => setSaveStatus(""), 2000);
-  }
-
-  const sectionMatch = (line: string) => line.match(/^[A-Z][A-Z\s#\-0-9:]+\(.*\)$/);
-
-  const settingsItems = [
-    { labelKey: "scripts.tone", value: tone, options: toneOptions, set: setTone },
-    { labelKey: "scripts.audience", value: audience, options: audienceOptions, set: setAudience },
-    { labelKey: "scripts.language", value: language, options: languageOptions, set: setLanguage },
-    { labelKey: "scripts.videoType", value: videoType, options: videoTypeOptions, set: setVideoType },
-    { labelKey: "scripts.duration", value: duration, options: durationOptions, set: setDuration },
-  ];
-
-  const scriptText = genScript.toLowerCase();
-  const insightChecks = [
-    { id: "hook", labelKey: "scripts.check.hook", passed: /hook|intro|opening/.test(scriptText) },
-    { id: "structure", labelKey: "scripts.check.structure", passed: /intro|main|recap|conclusion|cta/.test(scriptText) },
-    { id: "cta", labelKey: "scripts.check.cta", passed: Boolean(genCta) || /subscribe|like|comment|follow|call to action|cta/.test(scriptText) },
-    { id: "detail", labelKey: "scripts.check.detail", passed: genScript.split(/\s+/).filter(Boolean).length >= 120 },
-  ];
-  const passedChecks = generated ? insightChecks.filter((check) => check.passed).length : 0;
-  const structureScore = generated ? Math.round((passedChecks / insightChecks.length) * 100) : 0;
-  const insightSuggestions = generated
-    ? insightChecks
-        .filter((check) => !check.passed)
-        .map((check) => {
-          if (check.id === "hook") return t("scripts.suggestion.hook");
-          if (check.id === "cta") return t("scripts.suggestion.cta");
-          if (check.id === "detail") return t("scripts.suggestion.detail");
-          return t("scripts.suggestion.structure");
-        })
-    : [t("scripts.emptyMsg")];
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-transparent text-[#F5F2F4]">
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        {/* Topbar */}
-        <header className="flex h-auto min-h-[64px] shrink-0 flex-col items-stretch gap-3 border-b border-[rgba(255,255,255,0.07)] px-4 py-3 md:h-[64px] md:flex-row md:items-center md:justify-between md:gap-0 md:px-9 md:py-0 xl:px-10">
-          <div className="flex min-w-0 items-center gap-3 pl-12 md:gap-5 md:pl-0">
-            <h1 className="text-[23px] font-bold tracking-[-0.02em] text-[#F5F2F4]">{t("scripts.title")}</h1>
-            <ChevronRight className="hidden h-4 w-4 text-[#5F6472] sm:block" strokeWidth={1.7} />
-            <button className="hidden min-w-0 items-center gap-1.5 text-[15px] text-[#A0A3AD] transition-colors duration-150 hover:text-white sm:flex">
-              <span className="truncate">{genTitle || t("scripts.subtitle")}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-[#5F6472]" />
-            </button>
-            {generated && <span className="hidden h-2.5 w-2.5 rounded-full bg-[#D06FA7] sm:block" />}
+    <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-canvas text-ink">
+      <div className="mx-auto flex w-full max-w-[1540px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-7 2xl:px-10">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-[27px] font-bold leading-tight tracking-[-0.035em] text-ink">Guion</h1>
+            <nav className="mt-3 flex items-center gap-2 text-[13px] text-ink-2" aria-label="Breadcrumb">
+              <span>Inicio</span>
+              <ChevronRight className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
+              <span className="text-ink-2">Guion</span>
+            </nav>
           </div>
 
-          <div className="flex items-center justify-end gap-2 md:gap-5">
-            {generated && (
-              <div className="hidden items-center gap-2 text-[13px] text-[#A0A3AD] lg:flex">
-                <CheckCircle2 className="h-4 w-4" strokeWidth={1.8} />
-                <span>{saveStatus || t("scripts.saved")}</span>
-              </div>
-            )}
-            <button
-              onClick={handleNewScript}
-              className="hidden h-10 items-center gap-2 rounded-[8px] border border-[rgba(255,255,255,0.07)] bg-white/[0.025] px-5 text-[14px] font-semibold text-[#F5F2F4] transition hover:border-[rgba(255,255,255,0.12)] hover:bg-white/[0.05] sm:flex"
-            >
-              <RotateCcw className="h-4 w-4 text-[#A0A3AD]" strokeWidth={1.7} />
-              {t("scripts.newScript")}
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={loading || !idea.trim()}
-              className="flex h-10 items-center gap-2 rounded-[8px] bg-[#D06FA7] px-5 text-[14px] font-semibold text-[#F9F5F8] transition hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed md:px-7"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" strokeWidth={1.8} />}
-              {loading ? t("scripts.generating") : generated ? t("scripts.regenerate") : t("scripts.generate")}
-            </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <label className="relative block min-w-0 sm:w-[280px] xl:w-[340px]">
+              <span className="sr-only">Buscar en guiones...</span>
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-2" strokeWidth={1.7} />
+              <input
+                type="search"
+                placeholder="Buscar en guiones..."
+                className="h-11 w-full rounded-[9px] border border-line bg-card px-11 pr-16 text-[13px] text-ink placeholder:text-ink-2 transition duration-200 hover:border-line-hi focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/15"
+              />
+              <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-[6px] border border-line bg-card-hi px-1.5 py-0.5 text-[11px] font-medium text-ink-2">
+                ⌘ K
+              </kbd>
+            </label>
+            <IconButton label="Notificaciones">
+              <span className="relative">
+                <Bell className="h-4 w-4" strokeWidth={1.8} />
+                <span className="absolute -right-0.5 -top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-card" />
+              </span>
+            </IconButton>
+            <div className="flex overflow-hidden rounded-[9px] shadow-[0_12px_34px_rgba(208,111,167,0.18)]">
+              <button
+                type="button"
+                onClick={handleNewScript}
+                className="inline-flex h-11 items-center justify-center gap-2 bg-accent px-5 text-[13px] font-semibold text-accent-fg transition duration-200 hover:bg-accent-hi"
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.9} />
+                Nuevo guion
+              </button>
+              <button
+                type="button"
+                aria-label="Opciones de nuevo guion"
+                className="grid h-11 w-11 place-items-center border-l border-white/15 bg-accent text-accent-fg transition duration-200 hover:bg-accent-hi"
+              >
+                <ChevronDown className="h-4 w-4" strokeWidth={1.9} />
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* 3-Column Layout */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto xl:grid-cols-[300px_minmax(580px,1fr)_454px] xl:overflow-hidden">
-          {/* Left: Steps Sidebar */}
-          <aside className="relative h-full border-r border-[rgba(255,255,255,0.07)] px-11 py-12">
-            <ol className="space-y-8">
-              {stepsList.map((step, index) => {
-                const isDone = index < activeStep;
-                const isActive = index === activeStep;
+        {(notice || error) && (
+          <div
+            className={`flex items-center gap-2 rounded-[10px] border px-4 py-3 text-[13px] ${
+              error
+                ? "border-danger/25 bg-danger-soft text-danger"
+                : "border-accent/20 bg-accent-soft text-accent-hi"
+            }`}
+          >
+            {error ? <XCircle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+            {error || notice}
+          </div>
+        )}
 
-                return (
-                  <li key={step} className="relative flex items-center gap-4">
-                    {index < stepsList.length - 1 ? (
-                      <span className="absolute left-[16px] top-[36px] h-[30px] border-l border-dashed border-[rgba(255,255,255,0.07)]" />
-                    ) : null}
-                    <span
-                      className={[
-                        "relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full border text-[14px] font-medium transition-colors duration-200",
-                        isDone || isActive
-                          ? "border-[rgba(208,111,167,0.3)] bg-[rgba(208,111,167,0.1)] text-[#D06FA7]"
-                          : "border-[rgba(255,255,255,0.07)] bg-[#151516] text-[#5F6472]",
-                      ].join(" ")}
-                    >
-                      {isDone ? <Check className="w-4 h-4 text-[#D06FA7]" strokeWidth={2.5} /> : index + 1}
-                    </span>
-                    <span
-                      className={[
-                        "text-[15px] font-medium transition-colors duration-200",
-                        isActive || isDone ? "text-[#D06FA7]" : "text-[#5F6472]",
-                      ].join(" ")}
-                    >
-                      {step}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          </aside>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_330px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-5">
+            <Card className="p-5 sm:p-6">
+              <SectionHeader
+                title="1. Describe tu guion"
+                description="Cuéntale a la IA qué necesitas y cómo debe ser tu guion."
+              />
 
-          {/* Center: Main Content */}
-          <main className="min-h-0 min-w-0 overflow-y-auto px-8 py-8 xl:px-14">
-            <div className="mx-auto max-w-[980px]">
-              <h2 className="text-[28px] font-bold tracking-[-0.025em] text-[#F5F2F4]">Ideia Base</h2>
-              <p className="mt-3 text-[15px] leading-6 text-[#A0A3AD]">
-                Escribe tu idea principal y nosotros generaremos un guion completo.
-              </p>
-
-              <Panel className="mt-6 px-6 py-5">
-                <div className="relative min-h-[185px]">
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <label htmlFor="script-idea" className="text-[14px] font-medium text-[#F5F2F4]">
-                      {t("scripts.ideaLabel")}
-                    </label>
-                    <Sparkles className="mt-1 h-5 w-5 text-[#D06FA7]" strokeWidth={1.7} />
-                  </div>
-                  <textarea
-                    id="script-idea"
-                    value={idea}
-                    onChange={(e) => setIdea(e.target.value)}
-                    maxLength={2000}
-                    placeholder={t("scripts.ideaPlaceholder")}
-                    className="h-[118px] w-full resize-none bg-transparent text-[14px] leading-6 text-[#F5F2F4] placeholder:text-[#5F6472] focus-visible:outline-none"
+              <div className="mt-7 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <FieldShell label="Objetivo">
+                  <SelectControl
+                    ariaLabel="Objetivo"
+                    value={objective}
+                    onChange={setObjective}
+                    options={["Informar", "Educar", "Vender", "Entretener"]}
                   />
-                  <div className="flex justify-between items-center text-[14px] text-[#A0A3AD]">
-                    <span>{idea.length} / 2000</span>
-                    {error && <span className="text-red-400">{error}</span>}
-                  </div>
+                </FieldShell>
+                <FieldShell label="Tema">
+                  <input
+                    value={topic}
+                    onChange={(event) => setTopic(event.target.value)}
+                    className="h-11 w-full rounded-[8px] border border-line bg-card-hi px-4 text-[13px] font-medium text-ink placeholder:text-ink-3 transition duration-200 hover:border-line-hi focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/15"
+                    placeholder="Productividad personal"
+                  />
+                </FieldShell>
+                <FieldShell label="Audiencia">
+                  <SelectControl
+                    ariaLabel="Audiencia"
+                    value={audience}
+                    onChange={setAudience}
+                    options={["Estudiantes universitarios", "Creadores de contenido", "Profesionales", "Emprendedores"]}
+                  />
+                </FieldShell>
+                <FieldShell label="Duración (aprox.)">
+                  <SelectControl
+                    ariaLabel="Duración aproximada"
+                    value={duration}
+                    onChange={setDuration}
+                    options={["1 - 3 minutos", "3 - 5 minutos", "5 - 8 minutos", "8 - 10 minutos"]}
+                  />
+                </FieldShell>
+              </div>
+
+              <div className="mt-6">
+                <div className="mb-2 flex flex-col gap-1">
+                  <label htmlFor="script-instructions" className="text-[12px] font-semibold text-ink">
+                    Instrucciones
+                  </label>
+                  <p className="text-[12px] leading-5 text-ink-2">
+                    Sé específico sobre el enfoque, tono, estilo y puntos clave que debe incluir.
+                  </p>
                 </div>
-              </Panel>
+                <textarea
+                  id="script-instructions"
+                  value={instructions}
+                  onChange={(event) => setInstructions(event.target.value.slice(0, 2000))}
+                  maxLength={2000}
+                  rows={5}
+                  className="min-h-[122px] w-full resize-y rounded-[9px] border border-line bg-card-hi px-4 py-4 text-[14px] leading-6 text-ink placeholder:text-ink-3 transition duration-200 hover:border-line-hi focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/15"
+                  placeholder={INITIAL_INSTRUCTIONS}
+                />
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-[12px] text-ink-2">{instructions.length} / 2000</span>
+                  <button
+                    type="button"
+                    onClick={handleGenerate}
+                    disabled={loading || !instructions.trim()}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[8px] bg-accent px-6 text-[13px] font-semibold text-accent-fg shadow-[0_10px_28px_rgba(208,111,167,0.16)] transition duration-200 hover:bg-accent-hi disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" strokeWidth={1.9} />}
+                    {loading ? "Generando..." : "Generar guion"}
+                  </button>
+                </div>
+              </div>
+            </Card>
 
-              {generated && (
-                <section className="mt-7">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-[#D06FA7]" strokeWidth={1.7} />
-                      <h2 className="text-[16px] font-semibold text-[#F5F2F4]">{genTitle || t("scripts.generatedTitle")}</h2>
-                    </div>
-                    {!isEditing && (
-                      <button onClick={handleStartEdit} className="text-[13px] font-medium text-[#A0A3AD] transition hover:text-white flex items-center gap-1.5">
-                        <Pencil className="w-3.5 h-3.5" /> Editar
-                      </button>
-                    )}
-                  </div>
+            <Card className="p-5 sm:p-6">
+              <SectionHeader
+                title="2. Resultado"
+                description="Revisa y edita el guion generado. Puedes copiarlo o guardarlo en tu proyecto."
+                actions={
+                  <>
+                    <SecondaryButton onClick={handleCopy} disabled={!result}>
+                      <Copy className="h-4 w-4 text-ink-2" strokeWidth={1.8} />
+                      Copiar
+                    </SecondaryButton>
+                    <SecondaryButton onClick={handleSave} disabled={!result}>
+                      <Save className="h-4 w-4 text-ink-2" strokeWidth={1.8} />
+                      Guardar
+                    </SecondaryButton>
+                  </>
+                }
+              />
 
-                  <Panel className="relative overflow-hidden">
-                    {isEditing ? (
-                      <div className="flex flex-col p-6">
-                        <textarea
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          className="w-full min-h-[300px] bg-transparent text-[14px] leading-relaxed text-[#F5F2F4] placeholder:text-[#5F6472] focus-visible:outline-none resize-y"
-                        />
-                        <div className="flex items-center justify-end gap-3 mt-4 border-t border-[rgba(255,255,255,0.07)] pt-4">
-                          <button onClick={handleCancelEdit} className="px-4 py-2 text-[13px] font-medium text-[#A0A3AD] hover:text-white transition">Cancelar</button>
-                          <button onClick={handleSaveEdit} className="px-4 py-2 rounded-[8px] bg-[#D06FA7] text-[13px] font-medium text-white transition hover:brightness-110">Salvar Modificações</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-6">
-                        <div className="text-[14px] text-[#F5F2F4] leading-[1.8] whitespace-pre-wrap font-normal">
-                          {String(genScript).split("\n").map((line, i) => {
-                            const isSection = sectionMatch(line);
-                            return (
-                              <p key={i} className={isSection ? "text-[#D06FA7] font-semibold text-[13px] uppercase tracking-wide mt-6 mb-2" : "text-[#A0A3AD]"}>
-                                {line}
-                              </p>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-[rgba(255,255,255,0.07)]">
-                          <div className="flex items-center gap-4 text-[12px] text-[#5F6472]">
-                            <span>{genScript.split(/\s+/).length.toLocaleString()} {t("scripts.words")}</span>
-                            <span className="w-1 h-1 rounded-full bg-[rgba(255,255,255,0.14)]" />
-                            <span>{genEstDuration}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={handleCopy} className="p-2 rounded-[6px] text-[#A0A3AD] hover:text-white hover:bg-[rgba(255,255,255,0.05)] transition-colors" title={t("scripts.copy")}><Copy className="w-4 h-4" /></button>
-                            <button onClick={() => handleExport("md")} className="p-2 rounded-[6px] text-[#A0A3AD] hover:text-white hover:bg-[rgba(255,255,255,0.05)] transition-colors" title={t("scripts.downloadMd")}><Download className="w-4 h-4" /></button>
-                            <button onClick={handleImprove} disabled={improving} className="ml-2 flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] border border-[rgba(255,255,255,0.07)] text-[12px] font-medium text-[#F5F2F4] hover:border-[rgba(255,255,255,0.12)] hover:bg-[rgba(255,255,255,0.05)] transition disabled:opacity-50">
-                              {improving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-                              Melhorar Texto
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </Panel>
-                </section>
-              )}
-            </div>
-          </main>
-
-          {/* Right: Settings & Insights */}
-          <aside className="min-w-0 space-y-4 px-5 pb-8 xl:overflow-y-auto xl:px-6 xl:py-7">
-            {/* Settings Card */}
-            <Panel className="p-5">
-              <PanelHeader title={t("scripts.settings")} />
-              <div className="space-y-4">
-                {settingsItems.map((item) => (
-                  <div key={item.labelKey} className="flex items-center justify-between gap-4">
-                    <p className="text-[13px] font-medium text-[#A0A3AD] shrink-0">{t(item.labelKey)}</p>
-                    <div className="relative w-full max-w-[160px]">
-                      <select
-                        value={item.value}
-                        onChange={(e) => item.set(e.target.value)}
-                        className="w-full bg-transparent text-right text-[13px] font-medium text-[#F5F2F4] appearance-none cursor-pointer pr-5 focus:outline-none truncate"
+              <div className="mt-5 rounded-[10px] border border-line bg-[#11131C]/70 p-4 sm:p-5">
+                {result ? (
+                  <div className="space-y-0">
+                    {result.map((section, sectionIndex) => (
+                      <article
+                        key={`${section.title}-${section.time}`}
+                        className={sectionIndex === 0 ? "pb-5" : "border-t border-line py-5 last:pb-0"}
                       >
-                        {item.options.map((o) => {
-                          const val = typeof o === "string" ? o : o.value;
-                          const label = typeof o === "string" ? o : t(o.labelKey);
-                          return <option key={val} value={val} className="bg-[#151516] text-[#F5F2F4]">{label}</option>;
-                        })}
-                      </select>
-                      <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#5F6472] pointer-events-none" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-
-            {/* Insights Card */}
-            <Panel className="p-5">
-              <PanelHeader title={t("scripts.insights")} />
-              <div className="mb-6">
-                <div className="relative w-[100px] h-[100px] mx-auto mt-2">
-                  <svg width={100} height={100} viewBox="0 0 100 100" className="rotate-[-90deg] block">
-                    <defs>
-                      <linearGradient id={gaugeId} x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#D06FA7" />
-                        <stop offset="100%" stopColor="#9B6CFF" />
-                      </linearGradient>
-                    </defs>
-                    <circle stroke="rgba(255,255,255,0.07)" strokeWidth={6} fill="transparent" r={42} cx={50} cy={50} />
-                    {generated && (
-                      <circle
-                        stroke={`url(#${gaugeId})`}
-                        strokeWidth={6}
-                        strokeDasharray={`${42 * 2 * Math.PI}`}
-                        strokeDashoffset={42 * 2 * Math.PI * (1 - structureScore / 100)}
-                        strokeLinecap="round"
-                        fill="transparent"
-                        r={42}
-                        cx={50}
-                        cy={50}
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    )}
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center flex-col">
-                    <span className="text-[26px] font-bold text-[#F5F2F4] leading-none">{generated ? structureScore : "--"}</span>
-                    <span className="text-[10px] uppercase tracking-wide text-[#5F6472] mt-1">Score</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 pt-4 border-t border-[rgba(255,255,255,0.07)]">
-                {insightChecks.map((check) => (
-                  <div key={check.id} className="flex items-center justify-between">
-                    <span className="text-[13px] text-[#A0A3AD]">{t(check.labelKey)}</span>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${generated && check.passed ? "bg-[rgba(208,111,167,0.1)] text-[#D06FA7]" : "bg-[rgba(255,255,255,0.05)] text-[#5F6472]"}`}>
-                      <Check className="w-3 h-3" strokeWidth={2.5} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {generated && insightSuggestions.length > 0 && insightSuggestions[0] !== t("scripts.emptyMsg") && (
-                <div className="mt-5 pt-4 border-t border-[rgba(255,255,255,0.07)]">
-                  <div className="flex items-center gap-1.5 mb-3 text-[13px] font-medium text-[#F5F2F4]">
-                    <Info className="w-4 h-4 text-[#D06FA7]" />
-                    Sugestões
-                  </div>
-                  <div className="space-y-2">
-                    {insightSuggestions.map((s, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <Circle className="w-1.5 h-1.5 text-[#5F6472] mt-1.5 shrink-0" fill="currentColor" />
-                        <span className="text-[12px] text-[#A0A3AD] leading-relaxed">{s}</span>
-                      </div>
+                        <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <h3 className="text-[14px] font-bold text-accent">{section.title}</h3>
+                          <span className="text-[12px] font-medium text-ink-3">({section.time})</span>
+                        </div>
+                        {section.body ? (
+                          <p className="max-w-[78ch] text-[14px] leading-6 text-ink-2">{section.body}</p>
+                        ) : null}
+                        {section.items ? (
+                          <ol className="mt-3 space-y-3 text-[14px] leading-6 text-ink-2">
+                            {section.items.map((item, index) => (
+                              <li key={item.title}>
+                                <p className="font-semibold text-ink">
+                                  {index + 1}. {item.title}
+                                </p>
+                                <p className="max-w-[78ch] text-ink-2">{item.body}</p>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : null}
+                      </article>
                     ))}
+                    <div className="flex justify-center border-t border-line pt-5">
+                      <button
+                        type="button"
+                        className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line bg-white/[0.025] px-5 text-[13px] font-semibold text-ink-2 transition duration-200 hover:border-line-hi hover:bg-hover hover:text-ink"
+                      >
+                        Mostrar más
+                        <ChevronDown className="h-4 w-4" strokeWidth={1.8} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </Panel>
+                ) : (
+                  <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+                    <div className="mb-4 grid h-12 w-12 place-items-center rounded-[10px] border border-line bg-card-hi">
+                      <FileText className="h-5 w-5 text-accent" strokeWidth={1.7} />
+                    </div>
+                    <p className="text-[14px] font-semibold text-ink">Aún no hay resultado</p>
+                    <p className="mt-2 max-w-[34ch] text-[13px] leading-5 text-ink-2">
+                      Completa las instrucciones y genera una primera versión para revisarla aquí.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <aside className="min-w-0 space-y-4">
+            <SidebarCard
+              title="Variables"
+              action={
+                <IconButton label="Agregar variable">
+                  <Plus className="h-4 w-4" strokeWidth={1.8} />
+                </IconButton>
+              }
+            >
+              <p className="mb-4 text-[13px] leading-5 text-ink-2">Inserta información dinámica en tu guion.</p>
+              <div className="space-y-3">
+                {VARIABLES.map(([variable, description]) => (
+                  <button
+                    type="button"
+                    key={variable}
+                    onClick={() => insertVariable(variable)}
+                    className="flex w-full items-center gap-3 rounded-[8px] text-left transition duration-200 hover:bg-hover"
+                  >
+                    <span className="shrink-0 rounded-[7px] border border-line bg-card-hi px-2.5 py-1 text-[12px] font-semibold text-ink-2">
+                      {variable}
+                    </span>
+                    <span className="text-[12px] text-ink-2">{description}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-accent transition hover:text-accent-hi">
+                Ver todas las variables
+                <ChevronRight className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </SidebarCard>
+
+            <SidebarCard
+              title="Voz de marca"
+              action={
+                <IconButton label="Editar voz de marca">
+                  <Edit3 className="h-4 w-4" strokeWidth={1.8} />
+                </IconButton>
+              }
+            >
+              <p className="text-[13px] leading-6 text-ink-2">
+                Usa un lenguaje, tono, directo y empático. Evita tecnicismos innecesarios y habla como si conversaras con tu audiencia.
+              </p>
+              <button type="button" className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-accent transition hover:text-accent-hi">
+                Editar voz de marca
+                <ChevronRight className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </SidebarCard>
+
+            <SidebarCard title="Referencias">
+              <p className="text-[13px] leading-5 text-ink-2">
+                Archivos, guiones o links que querés que la IA tenga en cuenta.
+              </p>
+              <button
+                type="button"
+                className="mt-4 inline-flex h-10 items-center gap-2 rounded-[8px] border border-line bg-white/[0.025] px-4 text-[13px] font-semibold text-ink-2 transition duration-200 hover:border-line-hi hover:bg-hover hover:text-ink"
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.8} />
+                Agregar referencia
+              </button>
+            </SidebarCard>
+
+            <SidebarCard title="Historial de versiones">
+              <div className="space-y-1">
+                {VERSIONS.map(([version, time]) => (
+                  <button
+                    type="button"
+                    key={version}
+                    className="flex w-full items-center justify-between gap-3 rounded-[8px] py-2 text-left transition duration-200 hover:bg-hover"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-ink">{version}</span>
+                      <span className="mt-1 block text-[12px] text-ink-3">{time}</span>
+                    </span>
+                    <MoreHorizontal className="h-4 w-4 shrink-0 text-ink-3" strokeWidth={1.8} />
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="mt-4 inline-flex items-center gap-2 text-[13px] font-semibold text-accent transition hover:text-accent-hi">
+                Ver todas las versiones
+                <ChevronRight className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </SidebarCard>
           </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
