@@ -17,6 +17,10 @@ async function touch(filePath: string) {
   await writeFile(filePath, "@echo off\r\necho test\r\n", "utf8");
 }
 
+function testEnv(env: Record<string, string>): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...env };
+}
+
 beforeEach(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "open-studio-agents-"));
 });
@@ -31,7 +35,7 @@ describe("agent executable resolver", () => {
     await touch(path.join(appData, "npm", "codex.cmd"));
 
     const resolved = resolveAgentExecutable(agent("codex"), {}, {
-      env: { PATH: "", APPDATA: appData, PATHEXT: ".EXE;.CMD;.BAT;.COM" },
+      env: testEnv({ PATH: "", APPDATA: appData, PATHEXT: ".EXE;.CMD;.BAT;.COM" }),
       homeDir: tempRoot,
       platform: "win32",
     });
@@ -47,7 +51,7 @@ describe("agent executable resolver", () => {
     await touch(path.join(pathDir, "codex.cmd"));
 
     const resolved = resolveAgentExecutable(agent("codex"), { CODEX_BIN: custom }, {
-      env: { PATH: pathDir, PATHEXT: ".EXE;.CMD;.BAT;.COM" },
+      env: testEnv({ PATH: pathDir, PATHEXT: ".EXE;.CMD;.BAT;.COM" }),
       homeDir: tempRoot,
       platform: "win32",
     });
@@ -61,7 +65,7 @@ describe("agent executable resolver", () => {
     await touch(path.join(appData, "npm", "opencode.cmd"));
 
     const resolved = resolveAgentExecutable(agent("opencode"), {}, {
-      env: { PATH: "", APPDATA: appData, PATHEXT: ".EXE;.CMD;.BAT;.COM" },
+      env: testEnv({ PATH: "", APPDATA: appData, PATHEXT: ".EXE;.CMD;.BAT;.COM" }),
       homeDir: tempRoot,
       platform: "win32",
     });
@@ -72,7 +76,7 @@ describe("agent executable resolver", () => {
 
   it("returns undefined when an agent is not installed anywhere searched", () => {
     const resolved = resolveAgentExecutable(agent("gemini"), {}, {
-      env: { PATH: "", PATHEXT: ".EXE;.CMD;.BAT;.COM" },
+      env: testEnv({ PATH: "", PATHEXT: ".EXE;.CMD;.BAT;.COM" }),
       homeDir: tempRoot,
       platform: "win32",
     });
@@ -82,7 +86,10 @@ describe("agent executable resolver", () => {
 
   it("exposes known user toolchain locations used by GUI-launched apps", () => {
     const dirs = wellKnownUserToolchainBins({
-      env: { APPDATA: path.join(tempRoot, "Roaming"), LOCALAPPDATA: path.join(tempRoot, "Local") },
+      env: testEnv({
+        APPDATA: path.join(tempRoot, "Roaming"),
+        LOCALAPPDATA: path.join(tempRoot, "Local"),
+      }),
       homeDir: tempRoot,
       platform: "win32",
     });
@@ -93,7 +100,7 @@ describe("agent executable resolver", () => {
 
   it("wraps Windows cmd shims in cmd.exe safely", () => {
     const invocation = createAgentCommandInvocation("C:\\Users\\Lucas Test\\AppData\\Roaming\\npm\\codex.cmd", ["--version"], {
-      ComSpec: "C:\\Windows\\System32\\cmd.exe",
+      ...testEnv({ ComSpec: "C:\\Windows\\System32\\cmd.exe" }),
     }, "win32");
 
     expect(invocation.command).toBe("C:\\Windows\\System32\\cmd.exe");

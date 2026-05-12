@@ -46,9 +46,21 @@ function jsonResponse(data: unknown, init?: ResponseInit): Response {
 }
 
 function mockFetchResponse(response: Response) {
-  const fetchMock = vi.fn(async () => response);
+  const fetchMock = vi.fn(async (input: URL | string | Request, init?: RequestInit) => {
+    void input;
+    void init;
+    return response;
+  });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+function firstFetchCall(fetchMock: {
+  mock: { calls: Array<[URL | string | Request, RequestInit?]> };
+}): [URL | string, RequestInit] {
+  const [input, init = {}] = fetchMock.mock.calls[0] ?? [];
+  const url = input instanceof Request ? input.url : input;
+  return [url, init];
 }
 
 function parseBody(init: RequestInit | undefined): Record<string, unknown> {
@@ -78,7 +90,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://api.openai.com/v1/chat/completions");
     expect(init.method).toBe("POST");
     expect(init.headers).toMatchObject({
@@ -112,7 +124,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://api.openai.com/v1/images/generations");
     expect(parseBody(init)).toMatchObject({
       model: "image-test",
@@ -135,7 +147,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
     expect(init.headers).toMatchObject({
       "x-api-key": "test-key",
@@ -163,7 +175,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent?key=test-key"
     );
@@ -190,7 +202,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://minimax.test/v1/text/chatcompletion_v2");
     expect(init.headers).toMatchObject({
       Authorization: "Bearer test-key",
@@ -224,7 +236,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://queue.fal.run/fal-ai/test-image");
     expect(init.headers).toMatchObject({
       Authorization: "Key test-key",
@@ -240,12 +252,14 @@ describe("provider adapter contracts", () => {
   });
 
   it("builds Pollinations image requests without leaking keys in returned URLs", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(new Uint8Array([1, 2, 3]), {
+    const fetchMock = vi.fn(async (input: URL | string | Request, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(new Uint8Array([1, 2, 3]), {
         status: 200,
         headers: { "Content-Type": "image/png" },
-      })
-    );
+      });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const config = providerConfig("pollinations", { models: { image: "flux" } });
 
@@ -254,7 +268,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toContain("https://gen.pollinations.ai/image/Image%20prompt");
     expect(String(url)).toContain("model=flux");
     expect(String(url)).not.toContain("test-key");
@@ -281,7 +295,7 @@ describe("provider adapter contracts", () => {
       config
     );
 
-    const [url, init] = fetchMock.mock.calls[0] as [URL | string, RequestInit];
+    const [url, init] = firstFetchCall(fetchMock);
     expect(String(url)).toBe("https://api.replicate.com/v1/models/owner/model-name/predictions");
     expect(init.headers).toMatchObject({
       Authorization: "Bearer test-key",
